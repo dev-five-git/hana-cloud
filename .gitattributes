@@ -1,5 +1,6 @@
 * text=auto eol=lf
 
 *.ino text eol=lf
+*.hex -text
 *.json text eol=lf
 *.md text eol=lf

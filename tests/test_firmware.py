@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -164,6 +165,104 @@ class RenderingTests(unittest.TestCase):
             rendered,
             b'{\n  "label": "\xed\x95\x9c\xeb\xb2\x88",\n  "nested": {\n    "value": 1\n  }\n}\n',
         )
+
+
+class CompilerTests(unittest.TestCase):
+    VALID_HEX = b":0100000001FE\n:00000001FF\n"
+
+    def compile_in_temporary_root(self, outputs: list[dict[str, bytes]]) -> bytes:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            sketch = root / "boards" / "arduino-uno-r3.ino"
+            sketch.parent.mkdir(parents=True)
+            sketch.write_text("void setup() {}\nvoid loop() {}\n", encoding="utf-8")
+            calls = 0
+
+            def runner(
+                cli: str,
+                fqbn: str,
+                staged_sketch: Path,
+                output_dir: Path,
+            ) -> None:
+                nonlocal calls
+                self.assertEqual(cli, "arduino-cli")
+                self.assertEqual(fqbn, "arduino:avr:uno")
+                self.assertEqual(
+                    (staged_sketch / "arduino-uno-r3.ino").read_text(encoding="utf-8"),
+                    "void setup() {}\nvoid loop() {}\n",
+                )
+                output_dir.mkdir(parents=True, exist_ok=True)
+                for name, data in outputs[calls].items():
+                    (output_dir / name).write_bytes(data)
+                calls += 1
+
+            result = firmware.compile_reproducible(
+                root,
+                board_source(),
+                "arduino-cli",
+                runner=runner,
+            )
+            self.assertEqual(calls, 2)
+            return result
+
+    def test_selects_the_normal_hex_and_never_the_bootloader_image(self) -> None:
+        outputs = [
+            {
+                "arduino-uno-r3.ino.hex": self.VALID_HEX,
+                "arduino-uno-r3.ino.with_bootloader.hex": b"bootloader",
+            },
+            {
+                "arduino-uno-r3.ino.hex": self.VALID_HEX,
+                "arduino-uno-r3.ino.with_bootloader.hex": b"different bootloader",
+            },
+        ]
+
+        result = self.compile_in_temporary_root(outputs)
+
+        self.assertEqual(result, self.VALID_HEX)
+
+    def test_rejects_builds_that_only_emit_a_bootloader_image(self) -> None:
+        outputs = [
+            {"arduino-uno-r3.ino.with_bootloader.hex": self.VALID_HEX},
+            {"arduino-uno-r3.ino.with_bootloader.hex": self.VALID_HEX},
+        ]
+
+        with self.assertRaisesRegex(ValueError, "normal application HEX"):
+            self.compile_in_temporary_root(outputs)
+
+    def test_rejects_nondeterministic_compiler_output(self) -> None:
+        outputs = [
+            {"arduino-uno-r3.ino.hex": self.VALID_HEX},
+            {"arduino-uno-r3.ino.hex": b":00000001FF\n"},
+        ]
+
+        with self.assertRaisesRegex(ValueError, "not reproducible"):
+            self.compile_in_temporary_root(outputs)
+
+    def test_rejects_an_intel_hex_record_with_a_bad_checksum(self) -> None:
+        with self.assertRaisesRegex(ValueError, "checksum"):
+            firmware.validate_intel_hex(b":0100000001FD\n:00000001FF\n")
+
+
+class PullRequestPolicyTests(unittest.TestCase):
+    def test_rejects_direct_generated_file_changes(self) -> None:
+        for path in ["boards/arduino-uno-r3.hex", "boards/arduino-uno-r3.json"]:
+            with self.subTest(path=path), self.assertRaisesRegex(ValueError, "generated"):
+                firmware.validate_changed_paths([path], None, None)
+
+    def test_rejects_a_direct_registry_board_change(self) -> None:
+        base = {"apps": [], "boards": []}
+        current = {"apps": [], "boards": [{"id": "arduino.uno-r3"}]}
+
+        with self.assertRaisesRegex(ValueError, "registry.json boards"):
+            firmware.validate_changed_paths(["registry.json"], base, current)
+
+    def test_allows_app_registry_changes_when_boards_are_unchanged(self) -> None:
+        boards = [{"id": "arduino.uno-r3"}]
+        base = {"apps": [], "boards": copy.deepcopy(boards)}
+        current = {"apps": [{"id": "pdf-viewer"}], "boards": copy.deepcopy(boards)}
+
+        firmware.validate_changed_paths(["registry.json", "apps/pdf-viewer.json"], base, current)
 
 
 if __name__ == "__main__":

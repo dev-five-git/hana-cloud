@@ -6,9 +6,12 @@ import copy
 import hashlib
 import json
 import re
+import shutil
+import subprocess
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 
 ID_PATTERN = re.compile(r"^[a-z0-9]+(?:[.-][a-z0-9]+)*$")
@@ -16,6 +19,7 @@ SLUG_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 FQBN_PATTERN = re.compile(r"^[A-Za-z0-9_-]+:[A-Za-z0-9_-]+:[A-Za-z0-9_-]+$")
 USB_ID_PATTERN = re.compile(r"^[0-9a-f]{4}$")
 CONFIDENCE_VALUES = {"exact", "likely", "ambiguous"}
+FIRMWARE_LIMIT = 2 * 1024 * 1024
 
 
 def canonical_json(value: Any) -> bytes:
@@ -264,3 +268,110 @@ def render_registry(
         rendered["revision"] = revision + 1
     rendered["boards"] = boards
     return rendered
+
+
+CompileRunner = Callable[[str, str, Path, Path], None]
+
+
+def _run_arduino_cli(cli: str, fqbn: str, staged_sketch: Path, output_dir: Path) -> None:
+    subprocess.run(
+        [
+            cli,
+            "compile",
+            "--clean",
+            "--fqbn",
+            fqbn,
+            "--output-dir",
+            str(output_dir),
+            str(staged_sketch),
+        ],
+        check=True,
+    )
+
+
+def validate_intel_hex(data: bytes) -> None:
+    if not data or len(data) > FIRMWARE_LIMIT:
+        raise ValueError(f"firmware must contain 1 to {FIRMWARE_LIMIT} bytes")
+    try:
+        lines = data.decode("ascii").splitlines()
+    except UnicodeDecodeError as error:
+        raise ValueError("firmware is not ASCII Intel HEX") from error
+    if not lines:
+        raise ValueError("firmware has no Intel HEX records")
+
+    saw_end_of_file = False
+    for line_number, line in enumerate(lines, start=1):
+        if saw_end_of_file:
+            raise ValueError("Intel HEX contains a record after end-of-file")
+        if not line.startswith(":") or len(line) == 1 or len(line[1:]) % 2:
+            raise ValueError(f"Intel HEX record {line_number} has invalid syntax")
+        try:
+            record = bytes.fromhex(line[1:])
+        except ValueError as error:
+            raise ValueError(f"Intel HEX record {line_number} is not hexadecimal") from error
+        if len(record) < 5 or len(record) != record[0] + 5:
+            raise ValueError(f"Intel HEX record {line_number} has an invalid byte count")
+        if sum(record) & 0xFF:
+            raise ValueError(f"Intel HEX record {line_number} has an invalid checksum")
+        record_type = record[3]
+        if record_type not in {0, 1, 2, 3, 4, 5}:
+            raise ValueError(f"Intel HEX record {line_number} has an unsupported type")
+        if record_type == 1:
+            if record[0] != 0 or record[1:3] != b"\x00\x00":
+                raise ValueError("Intel HEX end-of-file record is malformed")
+            saw_end_of_file = True
+    if not saw_end_of_file:
+        raise ValueError("Intel HEX end-of-file record is missing")
+
+
+def _read_normal_hex(output_dir: Path, slug: str) -> bytes:
+    path = output_dir / f"{slug}.ino.hex"
+    if not path.is_file():
+        raise ValueError(f"compiler did not emit the normal application HEX for {slug}")
+    data = path.read_bytes()
+    validate_intel_hex(data)
+    return data
+
+
+def compile_reproducible(
+    root: Path,
+    source: BoardSource,
+    cli: str,
+    *,
+    runner: CompileRunner = _run_arduino_cli,
+) -> bytes:
+    source_path = root / source.sketch_path
+    if not source_path.is_file():
+        raise ValueError(f"sketch is missing: {source.sketch_path}")
+
+    with tempfile.TemporaryDirectory(prefix=f"hana-{source.slug}-") as directory:
+        build_root = Path(directory)
+        results = []
+        for attempt in (1, 2):
+            staged_sketch = build_root / f"sketch-{attempt}" / source.slug
+            staged_sketch.mkdir(parents=True)
+            shutil.copyfile(source_path, staged_sketch / f"{source.slug}.ino")
+            output_dir = build_root / f"output-{attempt}"
+            runner(cli, source.fqbn, staged_sketch, output_dir)
+            results.append(_read_normal_hex(output_dir, source.slug))
+
+    if results[0] != results[1]:
+        raise ValueError(f"compiler output is not reproducible for {source.id}")
+    return results[0]
+
+
+def validate_changed_paths(
+    changed_paths: list[str],
+    base_registry: dict[str, Any] | None,
+    current_registry: dict[str, Any] | None,
+) -> None:
+    for raw_path in changed_paths:
+        path = raw_path.replace("\\", "/")
+        if path.startswith("boards/") and (path.endswith(".hex") or path.endswith(".json")):
+            raise ValueError(f"generated file cannot be changed in a pull request: {path}")
+
+    if "registry.json" in {path.replace("\\", "/") for path in changed_paths}:
+        if not isinstance(base_registry, dict) or not isinstance(current_registry, dict):
+            raise ValueError("registry.json comparison requires both revisions")
+        if base_registry.get("boards") != current_registry.get("boards"):
+            raise ValueError("registry.json boards are generated and cannot be changed directly")
