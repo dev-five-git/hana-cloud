@@ -7,6 +7,7 @@ Hana Registry는 한번(HanBeon)이 사용하는 응용 프로그램 프로필�
 ## 저장소 구조
 
 ```text
+.gitattributes
 registry.json
 apps/
   apple.preview.json
@@ -15,12 +16,18 @@ boards/
   arduino-uno-r3.json
   arduino-uno-r3.ino
   arduino-uno-r3.png
+contracts/
+  normalization-examples.json
+schemas/
+  board.schema.json
+  normalization-examples.schema.json
+  registry.schema.json
 ```
 
 `registry.json`은 항상 저장소 루트에 존재합니다. 클라이언트는 이 파일만 주기적으로
 확인하고, 일치하는 응용 프로그램 프로필이나 보드 manifest를 필요할 때 내려받습니다.
-아래 JSON 블록은 필드 구조를 설명하는 예시이며 실제 해시와 전체 데이터는 Wave 1
-파일에서 확정합니다.
+아래 JSON 블록은 필드 구조를 설명하는 축약 예시입니다. 실제 항목과 해시는
+`registry.json`과 각 manifest를 기준으로 합니다.
 
 ## 루트 인덱스
 
@@ -35,9 +42,7 @@ boards/
       "path": "apps/apple.preview.json",
       "sha256": "64자리 소문자 SHA-256",
       "match": {
-        "macos": { "bundleIds": ["com.apple.Preview"] },
-        "windows": { "executables": [] },
-        "linux": { "desktopIds": [], "wmClasses": [] }
+        "macos": { "bundleIds": ["com.apple.Preview"] }
       }
     }
   ],
@@ -49,8 +54,13 @@ boards/
       "sha256": "64자리 소문자 SHA-256",
       "detect": {
         "usb": [
-          { "vid": "2341", "pid": "0043", "product": "Arduino Uno" },
-          { "vid": "2341", "pid": "0001" }
+          {
+            "vid": "2341",
+            "pid": "0043",
+            "confidence": "exact",
+            "manufacturerAliases": ["Arduino", "Arduino LLC", "Arduino (www.arduino.cc)"],
+            "productAliases": ["Arduino Uno", "Arduino Uno R3"]
+          }
         ]
       }
     }
@@ -63,10 +73,19 @@ boards/
 - `id`는 종류 안에서 유일한 소문자 점 표기 식별자입니다.
 - 모든 경로는 저장소 루트 기준 상대 경로이며 `..`, URL, 역슬래시를 허용하지 않습니다.
 - `sha256`은 대상 파일의 바이트를 계산한 64자리 소문자 16진수입니다.
-- macOS bundle ID와 Linux 식별자는 원문으로 비교하고, Windows 실행 파일명은
-  소문자로 정규화해 비교합니다.
-- 보드는 공장 출하 상태에서도 얻을 수 있는 USB VID/PID로만 자동 식별합니다.
-  선택적인 `product`는 동일 VID/PID 후보를 좁히는 힌트이며 단독 식별자로 쓰지 않습니다.
+- 앱의 플랫폼 식별자는 표시 이름 정규화를 적용하지 않습니다. Windows 실행 파일명은
+  basename과 Unicode 소문자로 비교하고, macOS bundle ID와 Linux desktop ID·WM_CLASS는
+  registry에 등록된 명시적 별칭과 비교합니다. 플랫폼 항목을 등록했다면 별칭 배열은
+  비어 있을 수 없고, Windows 값에는 경로가 아닌 `.exe` basename만 허용합니다.
+- 보드는 공장 출하 상태에서도 얻을 수 있는 USB VID/PID로 후보를 찾습니다. 선택적인
+  `manufacturerAliases`와 `productAliases`는 후보를 좁히는 힌트이며 단독 식별자로
+  쓰지 않습니다.
+- `confidence`가 `exact`이고 후보가 하나일 때만 자동 확정합니다. `likely`는 추천만,
+  `ambiguous` 또는 여러 후보는 사용자 선택으로 넘깁니다.
+- USB descriptor 필드가 운영체제에서 제공되지 않으면 중립으로 처리합니다. 제공된
+  manufacturer 또는 product가 해당 aliases와 일치하면 현재 confidence를 유지하고,
+  하나라도 불일치하면 후보를 버리지 않고 `ambiguous`로 낮춥니다. descriptor 일치는
+  VID/PID가 정한 confidence를 더 높은 단계로 올리지 않습니다.
 
 ## 응용 프로그램 프로필
 
@@ -111,15 +130,20 @@ boards/
   },
   "wiring": [
     {
-      "from": "D3",
-      "to": "순간 누름 스위치 가운데 단자",
-      "note": "다른 스위치 단자는 GND에 연결"
+      "from": "D2",
+      "to": "순간 누름 스위치 NO 단자",
+      "note": "스위치 COM 단자는 GND에 연결"
+    },
+    {
+      "from": "D9",
+      "to": "LED 양극",
+      "note": "220~330Ω 직렬 저항을 사용하고 LED 음극은 GND에 연결"
     }
   ],
   "image": {
     "path": "boards/arduino-uno-r3.png",
     "sha256": "64자리 소문자 SHA-256",
-    "alt": "Arduino Uno R3의 D3와 GND에 스위치를 연결한 배선도"
+    "alt": "Arduino Uno R3의 D2 스위치와 D9 LED 연결 배선도"
   }
 }
 ```
@@ -135,6 +159,40 @@ boards/
   Hana 펌웨어가 없고, Uno 계열은 포트를 여는 것만으로도 리셋될 수 있습니다.
 - USB 정보가 여러 보드와 일치하거나 등록되지 않은 클론 보드이면 자동 확정하지 않고,
   사용자가 지원 보드 목록에서 모델을 고르게 합니다.
+
+## 식별자와 문자열 정규화
+
+정규화는 USB의 제조사·제품 표시 문자열처럼 사람이 읽는 보조 정보에만 적용합니다.
+
+1. Unicode NFKC로 호환 문자를 정규화합니다.
+2. 앞뒤 공백을 제거하고 Unicode 소문자로 변환합니다.
+3. 하나 이상의 Unicode 공백, ASCII `_`, ASCII `-`를 단일 `-`로 바꿉니다.
+4. 결과 양끝의 `-`를 제거합니다.
+
+그 밖의 Unicode 문자와 괄호·점 등의 문자는 제거하지 않고 보존합니다.
+
+따라서 ` Arduino UNO_R3 `, `arduino-uno r3`, `Ａｒｄｕｉｎｏ　ＵＮＯ－Ｒ３`는 모두
+`arduino-uno-r3`가 됩니다. 공통 테스트 벡터는 `contracts/normalization-examples.json`에
+있으며 모든 클라이언트 구현은 같은 결과를 내야 합니다.
+
+registry `id`, 상대 경로, SHA-256, macOS bundle ID, Linux desktop ID·WM_CLASS에는 이
+표시 문자열 정규화를 적용하지 않습니다. 이 값은 문법을 검증하고 등록된 별칭과
+비교합니다. VID/PID는 숫자 `u16`으로 파싱한 뒤 정확히 네 자리 소문자 hex로 직렬화하여
+`0x2A03`과 `2a03` 같은 표기 차이를 제거합니다.
+
+## 보드 식별 한계
+
+공식 Arduino 플랫폼이 Uno에 배정한 VID/PID는 `arduino:avr:uno` 대상으로 확정할 수
+있습니다. 반면 CH340·FT232 같은 범용 USB-시리얼 칩의 VID/PID는 칩만 식별하고, 그 칩이
+장착된 보드 모델은 식별하지 못합니다. USB product·manufacturer·serial number와 포트
+경로는 보조 힌트일 뿐입니다. MCU signature도 ATmega328P 같은 칩 종류만 알려주므로
+정확한 보드 모델 판별이나 최초 자동 업로드의 근거로 사용하지 않습니다.
+
+Uno의 VID/PID 목록과 USB 문자열은 Arduino의
+[`boards.txt`](https://github.com/arduino/ArduinoCore-avr/blob/master/boards.txt)와
+[`Descriptors.c`](https://github.com/arduino/ArduinoCore-avr/blob/master/firmwares/atmegaxxu2/arduino-usbserial/Descriptors.c)를
+기준으로 관리합니다. 범용 USB-시리얼 칩의 자동 식별 한계는
+[Arduino CLI FAQ](https://docs.arduino.cc/arduino-cli/FAQ)와 같습니다.
 
 ## 클라이언트 계약
 
