@@ -1,7 +1,54 @@
 {
   "schemaVersion": 1,
-  "revision": 1,
-  "apps": [],
+  "revision": 2,
+  "apps": [
+    {
+      "id": "pdf-viewer",
+      "name": "PDF 뷰어",
+      "path": "apps/pdf-viewer.json",
+      "sha256": "739fdb18d93b143ffe6598c26177be73794f12052ad6018eca24d1912cbf22a8",
+      "match": {
+        "macos": {
+          "bundleIds": ["com.apple.Preview", "com.adobe.Reader"]
+        },
+        "windows": {
+          "executables": ["AcroRd32.exe", "Acrobat.exe"]
+        },
+        "linux": {
+          "desktopIds": [
+            "org.gnome.Evince",
+            "org.gnome.Evince.desktop",
+            "org.kde.okular",
+            "org.kde.okular.desktop"
+          ],
+          "wmClasses": ["evince", "Evince", "okular", "Okular"]
+        }
+      }
+    },
+    {
+      "id": "music-app",
+      "name": "음악 앱",
+      "path": "apps/music-app.json",
+      "sha256": "4884b22512081e176886b2c65b32e314839a2aa758c958833a6a1e39509248c6",
+      "match": {
+        "macos": {
+          "bundleIds": ["com.apple.Music", "com.spotify.client"]
+        },
+        "windows": {
+          "executables": ["AppleMusic.exe", "Spotify.exe"]
+        },
+        "linux": {
+          "desktopIds": [
+            "spotify",
+            "spotify.desktop",
+            "com.spotify.Client",
+            "com.spotify.Client.desktop"
+          ],
+          "wmClasses": ["spotify", "Spotify"]
+        }
+      }
+    }
+  ],
   "boards": [
     {
       "id": "arduino.uno-r3",

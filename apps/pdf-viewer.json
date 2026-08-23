@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "pdf-viewer",
+  "actions": [
+    {
+      "label": "다음 장",
+      "name": "페이지 넘기기",
+      "shortcut": {
+        "macos": "pagedown",
+        "windows": "pagedown",
+        "linux": "pagedown"
+      }
+    },
+    {
+      "label": "이전 장",
+      "name": "앞 페이지로",
+      "shortcut": {
+        "macos": "pageup",
+        "windows": "pageup",
+        "linux": "pageup"
+      }
+    }
+  ]
+}

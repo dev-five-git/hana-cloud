@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "id": "music-app",
+  "actions": [
+    {
+      "label": "재생/멈춤",
+      "name": "한 번 더 누르면 되돌아옴",
+      "shortcut": {
+        "macos": "mediaplaypause",
+        "windows": "mediaplaypause",
+        "linux": "mediaplaypause"
+      }
+    },
+    {
+      "label": "다음 곡",
+      "name": "다음 곡으로",
+      "shortcut": {
+        "macos": "medianexttrack",
+        "windows": "medianexttrack",
+        "linux": "medianexttrack"
+      }
+    },
+    {
+      "label": "이전 곡",
+      "name": "이전 곡으로",
+      "shortcut": {
+        "macos": "mediaprevtrack",
+        "windows": "mediaprevtrack",
+        "linux": "mediaprevtrack"
+      }
+    }
+  ]
+}

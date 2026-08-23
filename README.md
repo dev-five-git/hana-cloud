@@ -10,8 +10,8 @@ Hana Registry는 한번(HanBeon)이 사용하는 응용 프로그램 프로필�
 .gitattributes
 registry.json
 apps/
-  apple.preview.json
-  adobe.photoshop.json
+  music-app.json
+  pdf-viewer.json
 boards/
   arduino-uno-r3.json
   arduino-uno-r3.ino
@@ -19,6 +19,7 @@ boards/
 contracts/
   normalization-examples.json
 schemas/
+  app.schema.json
   board.schema.json
   normalization-examples.schema.json
   registry.schema.json
@@ -34,12 +35,12 @@ schemas/
 ```json
 {
   "schemaVersion": 1,
-  "revision": 1,
+  "revision": 2,
   "apps": [
     {
-      "id": "apple.preview",
-      "name": "미리보기",
-      "path": "apps/apple.preview.json",
+      "id": "pdf-viewer",
+      "name": "PDF 뷰어",
+      "path": "apps/pdf-viewer.json",
       "sha256": "64자리 소문자 SHA-256",
       "match": {
         "macos": { "bundleIds": ["com.apple.Preview"] }
@@ -92,10 +93,9 @@ schemas/
 ```json
 {
   "schemaVersion": 1,
-  "id": "apple.preview",
+  "id": "pdf-viewer",
   "actions": [
     {
-      "id": "next-page",
       "label": "다음 장",
       "name": "페이지 넘기기",
       "shortcut": {
@@ -112,6 +112,7 @@ schemas/
 - `actions`는 최대 3개입니다. 앞의 기본 4칸과 설정 칸의 순서는 바꾸지 않습니다.
 - `label`은 20자, `name`은 60자를 넘지 않습니다.
 - 각 단축키는 한번 클라이언트의 제한된 단축키 문법으로 해석할 수 있어야 합니다.
+- 단축키는 공백 없는 소문자 표준형으로 저장합니다.
 - 명령 실행 파일, 셸 문자열, 스크립트 URL은 허용하지 않습니다.
 - 지원하지 않는 플랫폼의 단축키는 생략할 수 있으며, 그 플랫폼에서는 해당 칸을
   만들지 않습니다.
