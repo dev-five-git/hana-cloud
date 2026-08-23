@@ -270,7 +270,8 @@ UI는 플랫폼 조건문을 갖지 않습니다.
   수정합니다. `.hex`, 공개 board manifest, `registry.json`의 boards 항목은 사람이
   수정할 수 없습니다.
 - 보드 소스 PR이 병합되면 고정된 Arduino toolchain을 사용하는 GitHub Actions가
-  스케치를 두 번 clean build하고 동일한 일반 HEX만 후속 커밋으로 게시합니다.
+  스케치를 두 번 clean build하고 동일한 일반 HEX만 전용 Deploy Key를 통해 후속
+  커밋으로 게시합니다. 일반 workflow의 `GITHUB_TOKEN`은 읽기 전용입니다.
 - 앱 프로필 변경은 `registry.json`의 apps 항목과 대상 파일을 같은 PR에서 갱신합니다.
 - 기존 `id`의 의미를 바꾸지 않습니다. 호환되지 않는 변경은 새 `id` 또는 새
   `schemaVersion`을 사용합니다.

@@ -276,6 +276,15 @@ class WorkflowContractTests(unittest.TestCase):
             self.assertIn("cache: pip", workflow, name)
             self.assertIn("cache-dependency-path: requirements-dev.txt", workflow, name)
 
+    def test_publisher_uses_only_the_dedicated_deploy_key_for_writes(self) -> None:
+        workflow = (
+            ROOT / ".github" / "workflows" / "publish-firmware.yml"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("contents: read", workflow)
+        self.assertNotIn("contents: write", workflow)
+        self.assertIn("ssh-key: ${{ secrets.HANA_FIRMWARE_PUBLISH_KEY }}", workflow)
+
 
 class PublishedSchemaTests(unittest.TestCase):
     def test_public_schema_accepts_the_compiled_firmware_contract(self) -> None:

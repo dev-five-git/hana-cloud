@@ -26,8 +26,9 @@ changes to them:
 
 Application profiles and the `apps` array remain human-managed. The protected
 `main` branch requires pull requests and validation, blocks deletion and force
-pushes, and grants an always-on bypass only to the repository's GitHub Actions
-App so the trusted publisher can add generated output.
+pushes, and grants an always-on bypass only to a dedicated write-enabled deploy
+key. The encrypted private key is available only to the trusted post-merge
+publisher, while its `GITHUB_TOKEN` remains read-only.
 
 ## Authoring input
 
@@ -74,9 +75,10 @@ sketch twice with the pinned toolchain to prove reproducible output.
 After an accepted source change reaches `main`, the trusted publisher checks
 out the latest `main`, performs the same two clean builds, compares the HEX
 bytes, regenerates all derived files, and commits them atomically as
-`github-actions[bot]`. A bot push made with `GITHUB_TOKEN` does not recursively
-start another publisher run. Concurrent publishers serialize and regenerate
-from the latest `main` before pushing.
+`github-actions[bot]`. The publisher pushes through its dedicated deploy key;
+generated output paths are excluded from the workflow trigger so that commit
+does not recursively start another publisher run. Concurrent publishers
+serialize and regenerate from the latest `main` before pushing.
 
 Between the source merge and generated commit, existing boards remain on their
 previous valid HEX and newly added boards remain absent from `registry.json`.

@@ -4,7 +4,7 @@
 
 **Goal:** Compile Hana Cloud Arduino sources into trusted Intel HEX artifacts and publish their manifests and registry hashes automatically.
 
-**Architecture:** Fork pull requests can change authoring inputs but never generated firmware. A read-only validator compiles proposed sketches, while a post-merge GitHub Actions publisher with the sole branch-protection bypass performs two clean builds and atomically commits generated HEX, manifests, and registry board metadata.
+**Architecture:** Fork pull requests can change authoring inputs but never generated firmware. A read-only validator compiles proposed sketches, while a post-merge GitHub Actions publisher using the sole write-enabled deploy-key bypass performs two clean builds and atomically commits generated HEX, manifests, and registry board metadata.
 
 **Tech Stack:** Python 3 standard library, Arduino CLI, Arduino AVR Core, JSON Schema 2020-12, GitHub Actions.
 
@@ -105,12 +105,12 @@
 - No additional source files unless verification reveals a defect.
 
 **Interfaces:**
-- Consumes: merged workflow and GitHub Actions App integration.
+- Consumes: merged workflow and the dedicated publisher deploy key.
 - Produces: published Uno HEX on `main` and an active main-branch ruleset.
 
 - [ ] **Step 1: Run all local verification**: unit tests, Python compilation, JSON parsing/schema checks, two-build HEX comparison, and `git diff --check`.
 - [ ] **Step 2: Open the Hana Cloud pull request and wait for the fork-safe validation check.**
 - [ ] **Step 3: Merge the PR using its exact head SHA.**
 - [ ] **Step 4: Observe the publisher bot commit and verify HEX size/hash, manifest hash, registry revision, and fresh-build byte equality.**
-- [ ] **Step 5: Create an active `main` ruleset requiring pull requests and `validate`, blocking deletion/force pushes, and granting always-on bypass only to the GitHub Actions App.**
+- [ ] **Step 5: Create an active `main` ruleset requiring pull requests, `validate`, and `guard-generated-files`, blocking deletion/force pushes, and granting always-on bypass only to the publisher deploy key.**
 - [ ] **Step 6: Audit the ruleset and repository tree, then record final SHAs and URLs.**
