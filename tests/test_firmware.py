@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import copy
+import json
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+
+import jsonschema
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -263,6 +266,24 @@ class PullRequestPolicyTests(unittest.TestCase):
         current = {"apps": [{"id": "pdf-viewer"}], "boards": copy.deepcopy(boards)}
 
         firmware.validate_changed_paths(["registry.json", "apps/pdf-viewer.json"], base, current)
+
+
+class PublishedSchemaTests(unittest.TestCase):
+    def test_public_schema_accepts_the_compiled_firmware_contract(self) -> None:
+        schema = json.loads((ROOT / "schemas" / "board.schema.json").read_text(encoding="utf-8"))
+        artifact = firmware.FirmwareArtifact(
+            path="boards/arduino-uno-r3.hex",
+            data=b":00000001FF\n",
+            source_sha256=SOURCE_HASH,
+            arduino_cli="1.5.1",
+            platform="arduino:avr@1.8.8",
+        )
+        manifest = firmware.render_manifest(board_source(), artifact)
+        validator = jsonschema.Draft202012Validator(schema)
+
+        errors = [error.message for error in validator.iter_errors(manifest)]
+
+        self.assertEqual(errors, [])
 
 
 if __name__ == "__main__":

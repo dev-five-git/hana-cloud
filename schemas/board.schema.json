@@ -6,28 +6,93 @@
   "additionalProperties": false,
   "required": ["schemaVersion", "id", "firmware", "wiring"],
   "properties": {
-    "schemaVersion": { "const": 1 },
+    "schemaVersion": { "enum": [1, 2] },
+    "id": { "$ref": "#/$defs/id" },
+    "firmware": { "type": "object" },
+    "wiring": { "$ref": "#/$defs/wiring" },
+    "image": { "$ref": "#/$defs/image" }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "schemaVersion": { "const": 1 } },
+        "required": ["schemaVersion"]
+      },
+      "then": { "properties": { "firmware": { "$ref": "#/$defs/legacyFirmware" } } }
+    },
+    {
+      "if": {
+        "properties": { "schemaVersion": { "const": 2 } },
+        "required": ["schemaVersion"]
+      },
+      "then": { "properties": { "firmware": { "$ref": "#/$defs/compiledFirmware" } } }
+    }
+  ],
+  "$defs": {
     "id": {
       "type": "string",
       "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$"
     },
-    "firmware": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "fqbn": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]+:[A-Za-z0-9_-]+:[A-Za-z0-9_-]+$"
+    },
+    "sketchPath": {
+      "type": "string",
+      "pattern": "^boards/[a-z0-9]+(?:-[a-z0-9]+)*\\.ino$"
+    },
+    "hexPath": {
+      "type": "string",
+      "pattern": "^boards/[a-z0-9]+(?:-[a-z0-9]+)*\\.hex$"
+    },
+    "legacyFirmware": {
       "type": "object",
       "additionalProperties": false,
       "required": ["path", "format", "fqbn", "sha256"],
       "properties": {
-        "path": {
-          "type": "string",
-          "pattern": "^boards/[a-z0-9]+(?:-[a-z0-9]+)*\\.ino$"
-        },
+        "path": { "$ref": "#/$defs/sketchPath" },
         "format": { "const": "arduino-sketch" },
-        "fqbn": {
-          "type": "string",
-          "pattern": "^[A-Za-z0-9_-]+:[A-Za-z0-9_-]+:[A-Za-z0-9_-]+$"
+        "fqbn": { "$ref": "#/$defs/fqbn" },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "compiledFirmware": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "format", "size", "sha256", "fqbn", "source", "toolchain"],
+      "properties": {
+        "path": { "$ref": "#/$defs/hexPath" },
+        "format": { "const": "intel-hex" },
+        "size": { "type": "integer", "minimum": 1, "maximum": 2097152 },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "fqbn": { "$ref": "#/$defs/fqbn" },
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "sha256"],
+          "properties": {
+            "path": { "$ref": "#/$defs/sketchPath" },
+            "sha256": { "$ref": "#/$defs/sha256" }
+          }
         },
-        "sha256": {
-          "type": "string",
-          "pattern": "^[0-9a-f]{64}$"
+        "toolchain": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["arduinoCli", "platform"],
+          "properties": {
+            "arduinoCli": {
+              "type": "string",
+              "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+            },
+            "platform": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]+:[A-Za-z0-9_-]+@[0-9]+\\.[0-9]+\\.[0-9]+$"
+            }
+          }
         }
       }
     },
@@ -54,10 +119,7 @@
           "type": "string",
           "pattern": "^boards/[a-z0-9]+(?:-[a-z0-9]+)*\\.png$"
         },
-        "sha256": {
-          "type": "string",
-          "pattern": "^[0-9a-f]{64}$"
-        },
+        "sha256": { "$ref": "#/$defs/sha256" },
         "alt": { "type": "string", "minLength": 1, "maxLength": 300 }
       }
     }
