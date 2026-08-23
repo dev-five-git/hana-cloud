@@ -364,6 +364,47 @@ class PublicationTests(unittest.TestCase):
             self.assertEqual(registry["revision"], 3)
             self.assertEqual(registry["boards"][0]["sha256"], firmware.sha256_bytes(manifest_bytes))
 
+    def test_rejects_a_symlinked_source_descriptor(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = self.create_root(directory)
+            descriptor = root / "sources" / "boards" / "arduino-uno-r3.json"
+            target = root / "descriptor-target.json"
+            target.write_bytes(descriptor.read_bytes())
+            descriptor.unlink()
+            descriptor.symlink_to(target)
+
+            with self.assertRaisesRegex(ValueError, "symbolic link"):
+                firmware.load_sources(root)
+
+    def test_rejects_a_symlinked_sketch_before_compilation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = self.create_root(directory)
+            sketch = root / "boards" / "arduino-uno-r3.ino"
+            target = root / "boards" / "other.ino"
+            target.write_bytes(sketch.read_bytes())
+            sketch.unlink()
+            sketch.symlink_to(target)
+
+            with self.assertRaisesRegex(ValueError, "symbolic link"):
+                firmware.generate(root, "arduino-cli", compiler=lambda *_: self.VALID_HEX)
+
+    def test_rejects_a_symlinked_board_image_before_hashing(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = self.create_root(directory)
+            descriptor = root / "sources" / "boards" / "arduino-uno-r3.json"
+            document = json.loads(descriptor.read_text(encoding="utf-8"))
+            document["image"] = {
+                "path": "boards/arduino-uno-r3.png",
+                "alt": "Arduino Uno R3 wiring",
+            }
+            descriptor.write_text(json.dumps(document), encoding="utf-8")
+            target = root / "boards" / "other.png"
+            target.write_bytes(b"not-a-real-image")
+            (root / "boards" / "arduino-uno-r3.png").symlink_to(target)
+
+            with self.assertRaisesRegex(ValueError, "symbolic link"):
+                firmware.generate(root, "arduino-cli", compiler=lambda *_: self.VALID_HEX)
+
     def test_generation_failure_leaves_every_published_file_untouched(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = self.create_root(directory)
@@ -478,6 +519,42 @@ class PublicationTests(unittest.TestCase):
             git("commit", "-m", "change boards")
 
             with self.assertRaisesRegex(ValueError, "registry.json boards"):
+                firmware.validate_pr(root, base)
+
+    def test_validate_pr_rejects_renaming_a_generated_file_out_of_boards(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = self.create_root(directory)
+            (root / "boards" / "arduino-uno-r3.json").write_text(
+                json.dumps({"schemaVersion": 1}), encoding="utf-8"
+            )
+
+            def git(*arguments: str) -> None:
+                subprocess.run(
+                    ["git", "-c", "commit.gpgSign=false", *arguments],
+                    cwd=root,
+                    check=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                )
+
+            git("init")
+            git("config", "user.name", "Hana Test")
+            git("config", "user.email", "hana-test@example.invalid")
+            git("add", ".")
+            git("commit", "-m", "base")
+            base = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=root, text=True
+            ).strip()
+
+            (root / "archive").mkdir()
+            git(
+                "mv",
+                "boards/arduino-uno-r3.json",
+                "archive/arduino-uno-r3-manifest.txt",
+            )
+            git("commit", "-m", "rename generated manifest")
+
+            with self.assertRaisesRegex(ValueError, "generated file"):
                 firmware.validate_pr(root, base)
 
 

@@ -35,6 +35,26 @@ def sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def _reject_symlink_components(root: Path, path: Path, field: str) -> None:
+    try:
+        relative = path.relative_to(root)
+    except ValueError as error:
+        raise ValueError(f"{field} escapes the repository root") from error
+    candidate = root
+    for part in relative.parts:
+        candidate /= part
+        if candidate.is_symlink():
+            rendered = relative.as_posix()
+            raise ValueError(f"{field} cannot use a symbolic link: {rendered}")
+
+
+def _require_regular_file(root: Path, path: Path, field: str) -> Path:
+    _reject_symlink_components(root, path, field)
+    if not path.is_file():
+        raise ValueError(f"{field} is missing: {path.relative_to(root).as_posix()}")
+    return path
+
+
 def _object(value: Any, field: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ValueError(f"{field} must be an object")
@@ -211,6 +231,7 @@ class ToolchainLock:
     @classmethod
     def load(cls, root: Path) -> "ToolchainLock":
         path = root / ".github" / "firmware-toolchain.json"
+        _require_regular_file(root, path, "toolchain lock")
         try:
             document = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, UnicodeError, json.JSONDecodeError) as error:
@@ -244,11 +265,13 @@ class ToolchainLock:
 
 def load_sources(root: Path) -> list[BoardSource]:
     source_dir = root / "sources" / "boards"
+    _reject_symlink_components(root, source_dir, "board source directory")
     if not source_dir.is_dir():
         raise ValueError("sources/boards directory is missing")
     sources = []
     ids: set[str] = set()
     for path in sorted(source_dir.glob("*.json")):
+        _require_regular_file(root, path, "board source descriptor")
         try:
             raw = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, UnicodeError, json.JSONDecodeError) as error:
@@ -256,6 +279,9 @@ def load_sources(root: Path) -> list[BoardSource]:
         source = BoardSource.from_document(path.stem, raw)
         if source.id in ids:
             raise ValueError(f"duplicate source id: {source.id}")
+        _require_regular_file(root, root / source.sketch_path, "board sketch")
+        if source.image is not None:
+            _require_regular_file(root, root / source.image["path"], "board image")
         ids.add(source.id)
         sources.append(source)
     if not sources:
@@ -370,8 +396,10 @@ def validate_intel_hex(data: bytes) -> None:
 
 def _read_normal_hex(output_dir: Path, slug: str) -> bytes:
     path = output_dir / f"{slug}.ino.hex"
-    if not path.is_file():
-        raise ValueError(f"compiler did not emit the normal application HEX for {slug}")
+    try:
+        _require_regular_file(output_dir, path, "compiler output")
+    except ValueError as error:
+        raise ValueError(f"compiler did not emit a safe normal application HEX for {slug}") from error
     data = path.read_bytes()
     validate_intel_hex(data)
     return data
@@ -384,9 +412,9 @@ def compile_reproducible(
     *,
     runner: CompileRunner = _run_arduino_cli,
 ) -> bytes:
-    source_path = root / source.sketch_path
-    if not source_path.is_file():
-        raise ValueError(f"sketch is missing: {source.sketch_path}")
+    source_path = _require_regular_file(
+        root, root / source.sketch_path, "board sketch"
+    )
 
     with tempfile.TemporaryDirectory(prefix=f"hana-{source.slug}-") as directory:
         build_root = Path(directory)
@@ -456,19 +484,23 @@ def build_publication(
 ) -> dict[str, bytes]:
     sources = load_sources(root)
     toolchain = ToolchainLock.load(root)
-    registry = _read_json(root / "registry.json", "registry.json")
+    registry_path = _require_regular_file(root, root / "registry.json", "registry.json")
+    registry = _read_json(registry_path, "registry.json")
     generated: dict[str, bytes] = {}
     published_boards = []
 
     for source in sources:
         firmware_data = compiler(root, source, cli)
         validate_intel_hex(firmware_data)
-        sketch_data = (root / source.sketch_path).read_bytes()
+        sketch_path = _require_regular_file(
+            root, root / source.sketch_path, "board sketch"
+        )
+        sketch_data = sketch_path.read_bytes()
         image_sha256 = None
         if source.image is not None:
-            image_path = root / source.image["path"]
-            if not image_path.is_file():
-                raise ValueError(f"image is missing: {source.image['path']}")
+            image_path = _require_regular_file(
+                root, root / source.image["path"], "board image"
+            )
             image_sha256 = sha256_bytes(image_path.read_bytes())
         artifact = FirmwareArtifact(
             path=f"boards/{source.slug}.hex",
@@ -506,6 +538,7 @@ def generate(
     changed = []
     for relative_path, data in generated.items():
         path = root / relative_path
+        _reject_symlink_components(root, path, "generated output")
         try:
             current = path.read_bytes()
         except FileNotFoundError:
@@ -523,6 +556,7 @@ def generate(
     changed.extend(stale)
 
     for relative_path in changed:
+        _reject_symlink_components(root, root / relative_path, "generated output")
         if relative_path in generated:
             _atomic_write(root / relative_path, generated[relative_path])
         else:
@@ -539,6 +573,7 @@ def verify(
     expected = build_publication(root, cli, compiler=compiler)
     mismatches = []
     for relative_path, data in expected.items():
+        _reject_symlink_components(root, root / relative_path, "generated output")
         try:
             current = (root / relative_path).read_bytes()
         except FileNotFoundError:
@@ -596,7 +631,10 @@ def validate_pr(root: Path, base: str, *, head: str = "HEAD") -> None:
             [
                 "git",
                 "diff",
-                "--name-only",
+                "--name-status",
+                "-z",
+                "--find-renames",
+                "--find-copies",
                 "--diff-filter=ACDMRT",
                 f"{base_commit}...{head_commit}",
             ],
@@ -606,7 +644,19 @@ def validate_pr(root: Path, base: str, *, head: str = "HEAD") -> None:
         )
     except subprocess.CalledProcessError as error:
         raise ValueError("cannot inspect pull request changes") from error
-    changed_paths = [line for line in changed_output.splitlines() if line]
+    fields = changed_output.split("\0")
+    if fields and fields[-1] == "":
+        fields.pop()
+    changed_paths = []
+    index = 0
+    while index < len(fields):
+        status = fields[index]
+        index += 1
+        path_count = 2 if status.startswith(("R", "C")) else 1
+        if not status or index + path_count > len(fields):
+            raise ValueError("git returned malformed changed-path data")
+        changed_paths.extend(fields[index : index + path_count])
+        index += path_count
     base_registry = None
     current_registry = None
     if "registry.json" in {path.replace("\\", "/") for path in changed_paths}:
