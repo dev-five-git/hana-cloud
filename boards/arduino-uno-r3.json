@@ -1,11 +1,20 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "arduino.uno-r3",
   "firmware": {
-    "path": "boards/arduino-uno-r3.ino",
-    "format": "arduino-sketch",
+    "path": "boards/arduino-uno-r3.hex",
+    "format": "intel-hex",
+    "size": 11211,
+    "sha256": "b177f39bd3dcbbb817b853ba594796d69644e6ce407456f0ce0005b35bd149f1",
     "fqbn": "arduino:avr:uno",
-    "sha256": "57e7e3011111cfc98c740c32be386b85fab304edd1e458c090fad9d303ed8f2d"
+    "source": {
+      "path": "boards/arduino-uno-r3.ino",
+      "sha256": "57e7e3011111cfc98c740c32be386b85fab304edd1e458c090fad9d303ed8f2d"
+    },
+    "toolchain": {
+      "arduinoCli": "1.5.1",
+      "platform": "arduino:avr@1.8.8"
+    }
   },
   "wiring": [
     {

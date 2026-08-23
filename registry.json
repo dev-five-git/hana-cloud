@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "revision": 2,
+  "revision": 3,
   "apps": [
     {
       "id": "pdf-viewer",
@@ -9,10 +9,16 @@
       "sha256": "739fdb18d93b143ffe6598c26177be73794f12052ad6018eca24d1912cbf22a8",
       "match": {
         "macos": {
-          "bundleIds": ["com.apple.Preview", "com.adobe.Reader"]
+          "bundleIds": [
+            "com.apple.Preview",
+            "com.adobe.Reader"
+          ]
         },
         "windows": {
-          "executables": ["AcroRd32.exe", "Acrobat.exe"]
+          "executables": [
+            "AcroRd32.exe",
+            "Acrobat.exe"
+          ]
         },
         "linux": {
           "desktopIds": [
@@ -21,7 +27,12 @@
             "org.kde.okular",
             "org.kde.okular.desktop"
           ],
-          "wmClasses": ["evince", "Evince", "okular", "Okular"]
+          "wmClasses": [
+            "evince",
+            "Evince",
+            "okular",
+            "Okular"
+          ]
         }
       }
     },
@@ -32,10 +43,16 @@
       "sha256": "4884b22512081e176886b2c65b32e314839a2aa758c958833a6a1e39509248c6",
       "match": {
         "macos": {
-          "bundleIds": ["com.apple.Music", "com.spotify.client"]
+          "bundleIds": [
+            "com.apple.Music",
+            "com.spotify.client"
+          ]
         },
         "windows": {
-          "executables": ["AppleMusic.exe", "Spotify.exe"]
+          "executables": [
+            "AppleMusic.exe",
+            "Spotify.exe"
+          ]
         },
         "linux": {
           "desktopIds": [
@@ -44,7 +61,10 @@
             "com.spotify.Client",
             "com.spotify.Client.desktop"
           ],
-          "wmClasses": ["spotify", "Spotify"]
+          "wmClasses": [
+            "spotify",
+            "Spotify"
+          ]
         }
       }
     }
@@ -54,43 +74,83 @@
       "id": "arduino.uno-r3",
       "name": "Arduino Uno R3",
       "manifest": "boards/arduino-uno-r3.json",
-      "sha256": "f3842b609b55f75cb00f2a2fda3e12cb2f11b0f24c9b793aa12dd8565ea9889b",
+      "sha256": "8dcdc7641e20059e4212febe016d8bc1f044320f0057a0d5b8f48afe34ae2227",
       "detect": {
         "usb": [
           {
             "vid": "2341",
             "pid": "0043",
             "confidence": "exact",
-            "manufacturerAliases": ["Arduino", "Arduino LLC", "Arduino (www.arduino.cc)"],
-            "productAliases": ["Arduino Uno", "Arduino Uno R3", "Arduino Uno Rev3"]
+            "manufacturerAliases": [
+              "Arduino",
+              "Arduino LLC",
+              "Arduino (www.arduino.cc)"
+            ],
+            "productAliases": [
+              "Arduino Uno",
+              "Arduino Uno R3",
+              "Arduino Uno Rev3"
+            ]
           },
           {
             "vid": "2341",
             "pid": "0001",
             "confidence": "exact",
-            "manufacturerAliases": ["Arduino", "Arduino LLC", "Arduino (www.arduino.cc)"],
-            "productAliases": ["Arduino Uno", "Arduino Uno R3", "Arduino Uno Rev3"]
+            "manufacturerAliases": [
+              "Arduino",
+              "Arduino LLC",
+              "Arduino (www.arduino.cc)"
+            ],
+            "productAliases": [
+              "Arduino Uno",
+              "Arduino Uno R3",
+              "Arduino Uno Rev3"
+            ]
           },
           {
             "vid": "2a03",
             "pid": "0043",
             "confidence": "exact",
-            "manufacturerAliases": ["Arduino", "Arduino SRL", "Arduino (www.arduino.cc)"],
-            "productAliases": ["Arduino Uno", "Arduino Uno R3", "Arduino Uno Rev3"]
+            "manufacturerAliases": [
+              "Arduino",
+              "Arduino SRL",
+              "Arduino (www.arduino.cc)"
+            ],
+            "productAliases": [
+              "Arduino Uno",
+              "Arduino Uno R3",
+              "Arduino Uno Rev3"
+            ]
           },
           {
             "vid": "2341",
             "pid": "0243",
             "confidence": "exact",
-            "manufacturerAliases": ["Arduino", "Arduino LLC", "Arduino (www.arduino.cc)"],
-            "productAliases": ["Arduino Uno", "Arduino Uno R3", "Arduino Uno Rev3"]
+            "manufacturerAliases": [
+              "Arduino",
+              "Arduino LLC",
+              "Arduino (www.arduino.cc)"
+            ],
+            "productAliases": [
+              "Arduino Uno",
+              "Arduino Uno R3",
+              "Arduino Uno Rev3"
+            ]
           },
           {
             "vid": "2341",
             "pid": "006a",
             "confidence": "exact",
-            "manufacturerAliases": ["Arduino", "Arduino LLC", "Arduino (www.arduino.cc)"],
-            "productAliases": ["Arduino Uno", "Arduino Uno R3", "Arduino Uno Rev3"]
+            "manufacturerAliases": [
+              "Arduino",
+              "Arduino LLC",
+              "Arduino (www.arduino.cc)"
+            ],
+            "productAliases": [
+              "Arduino Uno",
+              "Arduino Uno R3",
+              "Arduino Uno Rev3"
+            ]
           }
         ]
       }
