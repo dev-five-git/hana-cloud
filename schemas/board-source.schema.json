@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/dev-five-git/hana-cloud/main/schemas/board-source.schema.json",
+  "title": "Hana Board Authoring Source",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "id", "name", "sketch", "detect", "wiring"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "id": { "type": "string", "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$" },
+    "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+    "sketch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "fqbn"],
+      "properties": {
+        "path": { "type": "string", "pattern": "^boards/[a-z0-9]+(?:-[a-z0-9]+)*\\.ino$" },
+        "fqbn": { "type": "string", "pattern": "^[A-Za-z0-9_-]+:[A-Za-z0-9_-]+:[A-Za-z0-9_-]+$" }
+      }
+    },
+    "detect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["usb"],
+      "properties": {
+        "usb": { "type": "array", "minItems": 1, "items": { "$ref": "registry.schema.json#/$defs/usbMatch" } }
+      }
+    },
+    "wiring": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["from", "to"],
+        "properties": {
+          "from": { "type": "string", "minLength": 1, "maxLength": 40 },
+          "to": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "note": { "type": "string", "minLength": 1, "maxLength": 200 }
+        }
+      }
+    },
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "alt"],
+      "properties": {
+        "path": { "type": "string", "pattern": "^boards/[a-z0-9]+(?:-[a-z0-9]+)*\\.png$" },
+        "alt": { "type": "string", "minLength": 1, "maxLength": 300 }
+      }
+    }
+  }
+}

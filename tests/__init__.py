@@ -1,0 +1,1 @@
+"""Hana Cloud validation tests."""

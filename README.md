@@ -1,21 +1,27 @@
 # Hana Cloud
 
 Hana Cloud는 한번(HanBeon)이 사용하는 응용 프로그램 프로필과 외부 보드
-자료를 배포하는 공개 데이터 저장소입니다. 실행 코드와 업로더 구현은 두지 않고,
-검토 가능한 JSON·펌웨어·이미지만 관리합니다.
+자료를 배포하는 공개 데이터 저장소입니다. 클라이언트 실행 코드와 업로더 구현은
+두지 않고, 검토 가능한 JSON·펌웨어·이미지와 이를 검증·생성하는 CI만 관리합니다.
 
 ## 저장소 구조
 
 ```text
 .gitattributes
 registry.json
+.github/
+  firmware-toolchain.json
+  workflows/
 apps/
   music-app.json
   pdf-viewer.json
 boards/
+  arduino-uno-r3.hex
   arduino-uno-r3.json
   arduino-uno-r3.ino
   arduino-uno-r3.png
+sources/boards/
+  arduino-uno-r3.json
 contracts/
   normalization-examples.json
 schemas/
@@ -121,13 +127,22 @@ schemas/
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "arduino.uno-r3",
   "firmware": {
-    "path": "boards/arduino-uno-r3.ino",
-    "format": "arduino-sketch",
+    "path": "boards/arduino-uno-r3.hex",
+    "format": "intel-hex",
+    "size": 11211,
+    "sha256": "64자리 소문자 SHA-256",
     "fqbn": "arduino:avr:uno",
-    "sha256": "64자리 소문자 SHA-256"
+    "source": {
+      "path": "boards/arduino-uno-r3.ino",
+      "sha256": "64자리 소문자 SHA-256"
+    },
+    "toolchain": {
+      "arduinoCli": "1.5.1",
+      "platform": "arduino:avr@1.8.8"
+    }
   },
   "wiring": [
     {
@@ -151,6 +166,10 @@ schemas/
 
 - `id`는 `registry.json` 보드 항목과 정확히 같아야 합니다.
 - `firmware.path`와 선택적인 `image.path`는 같은 보드 basename을 사용합니다.
+- `firmware`는 Arduino CLI가 필요 없는 일반 업로드용 Intel HEX입니다. bootloader를
+  포함한 HEX는 배포하지 않습니다.
+- `firmware.source`와 `firmware.toolchain`은 소스와 바이너리의 대응을 감사하기 위한
+  provenance이며 CI가 계산합니다.
 - 이미지를 제공하면 스크린 리더용 `alt` 설명이 반드시 있어야 합니다.
 - 클라이언트는 manifest, 펌웨어, 이미지의 해시를 모두 확인한 뒤에만 로컬 경로를
   업로더 인터페이스에 넘깁니다.
@@ -206,8 +225,8 @@ Uno의 VID/PID 목록과 USB 문자열은 Arduino의
    검증하고 last-known-good 캐시에 원자적으로 저장합니다.
 4. 새 프로필 적용 시 `미리보기 프로필 인식 완료 · 버튼 2개 추가`처럼 한 번만
    알립니다. 다운로드 중이거나 실패한 상태를 300ms 폴링마다 반복 표시하지 않습니다.
-5. 네트워크·검증 실패 시 마지막 정상 캐시를 유지하고, 캐시도 없으면 한번에 내장된
-   기본 프리셋 또는 기본 4칸으로 동작합니다.
+5. 네트워크·검증 실패 시 마지막 정상 캐시를 유지하고, 캐시도 없으면 기본 4칸으로
+   동작합니다.
 
 현재 HanBeon 펌웨어의 `HANBEON_UNO_V1` handshake는 펌웨어 설치가 끝난 보드와
 런타임 연결을 맺는 기존 프로토콜로만 유지합니다. 최초 보드 식별이나 레지스트리
@@ -238,15 +257,21 @@ UI는 플랫폼 조건문을 갖지 않습니다.
    단위 테스트를 추가합니다. 네트워크는 포함하지 않습니다.
 3. **App profiles** — 인덱스 갱신, 프로필 검증·캐시·적용, 인식 완료 메시지를
    추가합니다.
-4. **Board catalog** — 보드 자료 검증·캐시, 배선 안내 UI, 다른 작업자가 구현하는
-   업로더에 넘길 안정적인 인터페이스를 추가합니다. 업로드 구현은 포함하지 않습니다.
+4. **Board catalog** — 보드 자료 검증·캐시, 배선 안내 UI, 컴파일된 HEX를 다른
+   작업자가 구현하는 업로더에 넘길 안정적인 인터페이스를 추가합니다. 업로드 구현은
+   포함하지 않습니다.
 5. **Desktop releases** — Changepacks가 만든 draft release에 Windows, macOS,
    Linux Tauri 번들을 올리고 모든 빌드 성공 후 release를 공개합니다.
 
 ## 변경 규칙
 
 - 데이터 변경은 PR로만 받습니다.
-- `registry.json`과 대상 파일은 같은 PR에서 함께 갱신합니다.
+- 보드 기여자는 `sources/boards/*.json`, 대응하는 `.ino`, 선택적인 `.png`만
+  수정합니다. `.hex`, 공개 board manifest, `registry.json`의 boards 항목은 사람이
+  수정할 수 없습니다.
+- 보드 소스 PR이 병합되면 고정된 Arduino toolchain을 사용하는 GitHub Actions가
+  스케치를 두 번 clean build하고 동일한 일반 HEX만 후속 커밋으로 게시합니다.
+- 앱 프로필 변경은 `registry.json`의 apps 항목과 대상 파일을 같은 PR에서 갱신합니다.
 - 기존 `id`의 의미를 바꾸지 않습니다. 호환되지 않는 변경은 새 `id` 또는 새
   `schemaVersion`을 사용합니다.
 - 저작권이나 재배포 권한을 확인할 수 없는 펌웨어와 이미지는 추가하지 않습니다.

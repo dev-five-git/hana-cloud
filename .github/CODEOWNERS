@@ -1,0 +1,6 @@
+/.github/ @owjs3901
+/scripts/ @owjs3901
+/schemas/ @owjs3901
+/boards/*.hex @owjs3901
+/boards/*.json @owjs3901
+/registry.json @owjs3901
