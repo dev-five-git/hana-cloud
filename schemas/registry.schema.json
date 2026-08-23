@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/dev-five-git/hana-registry/main/schemas/registry.schema.json",
+  "title": "Hana Registry Index",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "revision", "apps", "boards"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "revision": { "type": "integer", "minimum": 1 },
+    "apps": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/app" }
+    },
+    "boards": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/board" }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$"
+    },
+    "path": {
+      "type": "string",
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\)[A-Za-z0-9._/-]+$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "bundleId": {
+      "type": "string",
+      "maxLength": 255,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9-]*(?:\\.[A-Za-z0-9][A-Za-z0-9-]*)+$"
+    },
+    "windowsExecutable": {
+      "type": "string",
+      "maxLength": 255,
+      "pattern": "^(?![.\\s])(?!.*[.\\s]$)(?!.*[<>:\"/\\\\|?*\\u0000-\\u001f])[^/\\\\]{1,251}\\.[eE][xX][eE]$"
+    },
+    "desktopId": {
+      "type": "string",
+      "maxLength": 255,
+      "pattern": "^(?!.*\\.\\.)[A-Za-z0-9][A-Za-z0-9._-]{0,254}$"
+    },
+    "wmClass": {
+      "type": "string",
+      "maxLength": 255,
+      "pattern": "^(?!\\s)(?!.*\\s$)[^\\u0000-\\u001f\\u007f]{1,255}$"
+    },
+    "app": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "path", "sha256", "match"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "path": { "$ref": "#/$defs/path" },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "match": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "macos": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["bundleIds"],
+              "properties": {
+                "bundleIds": { "type": "array", "minItems": 1, "maxItems": 32, "items": { "$ref": "#/$defs/bundleId" }, "uniqueItems": true }
+              }
+            },
+            "windows": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["executables"],
+              "properties": {
+                "executables": { "type": "array", "minItems": 1, "maxItems": 32, "items": { "$ref": "#/$defs/windowsExecutable" }, "uniqueItems": true }
+              }
+            },
+            "linux": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["desktopIds", "wmClasses"],
+              "properties": {
+                "desktopIds": { "type": "array", "minItems": 1, "maxItems": 32, "items": { "$ref": "#/$defs/desktopId" }, "uniqueItems": true },
+                "wmClasses": { "type": "array", "minItems": 1, "maxItems": 32, "items": { "$ref": "#/$defs/wmClass" }, "uniqueItems": true }
+              }
+            }
+          },
+          "minProperties": 1
+        }
+      }
+    },
+    "board": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "manifest", "sha256", "detect"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "manifest": { "$ref": "#/$defs/path" },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "detect": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["usb"],
+          "properties": {
+            "usb": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "$ref": "#/$defs/usbMatch" }
+            }
+          }
+        }
+      }
+    },
+    "usbMatch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["vid", "pid", "confidence"],
+      "properties": {
+        "vid": { "type": "string", "pattern": "^[0-9a-f]{4}$" },
+        "pid": { "type": "string", "pattern": "^[0-9a-f]{4}$" },
+        "confidence": { "enum": ["exact", "likely", "ambiguous"] },
+        "manufacturerAliases": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "uniqueItems": true
+        },
+        "productAliases": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "uniqueItems": true
+        }
+      }
+    }
+  }
+}

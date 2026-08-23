@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "descriptorStrings": [
+    {
+      "inputs": [
+        " Arduino UNO_R3 ",
+        "arduino-uno r3",
+        "Ａｒｄｕｉｎｏ　ＵＮＯ－Ｒ３"
+      ],
+      "normalized": "arduino-uno-r3"
+    },
+    {
+      "inputs": [
+        "Arduino   LLC",
+        "ARDUINO_LLC",
+        "arduino-llc"
+      ],
+      "normalized": "arduino-llc"
+    },
+    {
+      "inputs": [
+        " MÜNCHEN_GmbH ",
+        "münchen-gmbh"
+      ],
+      "normalized": "münchen-gmbh"
+    },
+    {
+      "inputs": [
+        " Arduino (WWW.Arduino.cc) ",
+        "arduino-(www.arduino.cc)"
+      ],
+      "normalized": "arduino-(www.arduino.cc)"
+    }
+  ],
+  "usbHex": [
+    {
+      "input": "0x2A03",
+      "normalized": "2a03"
+    },
+    {
+      "input": "0X43",
+      "normalized": "0043"
+    }
+  ]
+}

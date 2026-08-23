@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "revision": 1,
+  "apps": [],
+  "boards": [
+    {
+      "id": "arduino.uno-r3",
+      "name": "Arduino Uno R3",
+      "manifest": "boards/arduino-uno-r3.json",
+      "sha256": "f3842b609b55f75cb00f2a2fda3e12cb2f11b0f24c9b793aa12dd8565ea9889b",
+      "detect": {
+        "usb": [
+          {
+            "vid": "2341",
+            "pid": "0043",
+            "confidence": "exact",
+            "manufacturerAliases": ["Arduino", "Arduino LLC", "Arduino (www.arduino.cc)"],
+            "productAliases": ["Arduino Uno", "Arduino Uno R3", "Arduino Uno Rev3"]
+          },
+          {
+            "vid": "2341",
+            "pid": "0001",
+            "confidence": "exact",
+            "manufacturerAliases": ["Arduino", "Arduino LLC", "Arduino (www.arduino.cc)"],
+            "productAliases": ["Arduino Uno", "Arduino Uno R3", "Arduino Uno Rev3"]
+          },
+          {
+            "vid": "2a03",
+            "pid": "0043",
+            "confidence": "exact",
+            "manufacturerAliases": ["Arduino", "Arduino SRL", "Arduino (www.arduino.cc)"],
+            "productAliases": ["Arduino Uno", "Arduino Uno R3", "Arduino Uno Rev3"]
+          },
+          {
+            "vid": "2341",
+            "pid": "0243",
+            "confidence": "exact",
+            "manufacturerAliases": ["Arduino", "Arduino LLC", "Arduino (www.arduino.cc)"],
+            "productAliases": ["Arduino Uno", "Arduino Uno R3", "Arduino Uno Rev3"]
+          },
+          {
+            "vid": "2341",
+            "pid": "006a",
+            "confidence": "exact",
+            "manufacturerAliases": ["Arduino", "Arduino LLC", "Arduino (www.arduino.cc)"],
+            "productAliases": ["Arduino Uno", "Arduino Uno R3", "Arduino Uno Rev3"]
+          }
+        ]
+      }
+    }
+  ]
+}

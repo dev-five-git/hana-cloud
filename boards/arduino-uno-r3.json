@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "arduino.uno-r3",
+  "firmware": {
+    "path": "boards/arduino-uno-r3.ino",
+    "format": "arduino-sketch",
+    "fqbn": "arduino:avr:uno",
+    "sha256": "57e7e3011111cfc98c740c32be386b85fab304edd1e458c090fad9d303ed8f2d"
+  },
+  "wiring": [
+    {
+      "from": "D2",
+      "to": "순간 누름 스위치 NO 단자",
+      "note": "스위치 COM 단자는 GND에 연결"
+    },
+    {
+      "from": "D9",
+      "to": "LED 양극",
+      "note": "220~330Ω 직렬 저항을 사용하고 LED 음극은 GND에 연결"
+    }
+  ]
+}
