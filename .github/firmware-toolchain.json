@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "arduinoCli": "1.5.1",
+  "platforms": {
+    "arduino:avr": "1.8.8"
+  }
+}
