@@ -1,0 +1,37 @@
+name: Generated File Guard
+
+on:
+  pull_request_target:
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    name: guard-generated-files
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out the trusted base revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.14"
+
+      - name: Inspect the pull request without checking out or executing its code
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "refs/pull/${PR_NUMBER}/merge"
+          head_sha="$(git rev-parse FETCH_HEAD)"
+          python scripts/firmware.py --root . validate-pr \
+            --base "$BASE_SHA" \
+            --head "$head_sha"

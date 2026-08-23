@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import argparse
 import copy
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -17,6 +20,8 @@ from typing import Any, Callable
 ID_PATTERN = re.compile(r"^[a-z0-9]+(?:[.-][a-z0-9]+)*$")
 SLUG_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 FQBN_PATTERN = re.compile(r"^[A-Za-z0-9_-]+:[A-Za-z0-9_-]+:[A-Za-z0-9_-]+$")
+PLATFORM_PATTERN = re.compile(r"^[A-Za-z0-9_-]+:[A-Za-z0-9_-]+$")
+VERSION_PATTERN = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 USB_ID_PATTERN = re.compile(r"^[0-9a-f]{4}$")
 CONFIDENCE_VALUES = {"exact", "likely", "ambiguous"}
 FIRMWARE_LIMIT = 2 * 1024 * 1024
@@ -198,6 +203,45 @@ class FirmwareArtifact:
         return len(self.data)
 
 
+@dataclass(frozen=True)
+class ToolchainLock:
+    arduino_cli: str
+    platforms: dict[str, str]
+
+    @classmethod
+    def load(cls, root: Path) -> "ToolchainLock":
+        path = root / ".github" / "firmware-toolchain.json"
+        try:
+            document = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError) as error:
+            raise ValueError(f"cannot read .github/firmware-toolchain.json: {error}") from error
+        lock = _object(document, "toolchain")
+        _keys(lock, {"schemaVersion", "arduinoCli", "platforms"}, set(), "toolchain")
+        if lock["schemaVersion"] != 1:
+            raise ValueError("toolchain.schemaVersion must be 1")
+        cli_version = lock["arduinoCli"]
+        if not isinstance(cli_version, str) or not VERSION_PATTERN.fullmatch(cli_version):
+            raise ValueError("toolchain.arduinoCli must be an exact semantic version")
+        raw_platforms = _object(lock["platforms"], "toolchain.platforms")
+        if not raw_platforms:
+            raise ValueError("toolchain.platforms must not be empty")
+        platforms = {}
+        for platform, version in raw_platforms.items():
+            if not isinstance(platform, str) or not PLATFORM_PATTERN.fullmatch(platform):
+                raise ValueError(f"toolchain platform is invalid: {platform}")
+            if not isinstance(version, str) or not VERSION_PATTERN.fullmatch(version):
+                raise ValueError(f"toolchain platform version is invalid: {platform}")
+            platforms[platform] = version
+        return cls(arduino_cli=cli_version, platforms=platforms)
+
+    def platform_for(self, fqbn: str) -> str:
+        platform = ":".join(fqbn.split(":", 2)[:2])
+        version = self.platforms.get(platform)
+        if version is None:
+            raise ValueError(f"FQBN platform is not locked: {platform}")
+        return f"{platform}@{version}"
+
+
 def load_sources(root: Path) -> list[BoardSource]:
     source_dir = root / "sources" / "boards"
     if not source_dir.is_dir():
@@ -375,3 +419,259 @@ def validate_changed_paths(
             raise ValueError("registry.json comparison requires both revisions")
         if base_registry.get("boards") != current_registry.get("boards"):
             raise ValueError("registry.json boards are generated and cannot be changed directly")
+
+
+GenerationCompiler = Callable[[Path, BoardSource, str], bytes]
+
+
+def _read_json(path: Path, field: str) -> dict[str, Any]:
+    try:
+        return _object(json.loads(path.read_text(encoding="utf-8")), field)
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise ValueError(f"cannot read {field}: {error}") from error
+
+
+def _atomic_write(path: Path, data: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    try:
+        with os.fdopen(descriptor, "wb") as temporary:
+            temporary.write(data)
+            temporary.flush()
+            os.fsync(temporary.fileno())
+        os.replace(temporary_name, path)
+    except BaseException:
+        try:
+            os.unlink(temporary_name)
+        except FileNotFoundError:
+            pass
+        raise
+
+
+def build_publication(
+    root: Path,
+    cli: str,
+    *,
+    compiler: GenerationCompiler = compile_reproducible,
+) -> dict[str, bytes]:
+    sources = load_sources(root)
+    toolchain = ToolchainLock.load(root)
+    registry = _read_json(root / "registry.json", "registry.json")
+    generated: dict[str, bytes] = {}
+    published_boards = []
+
+    for source in sources:
+        firmware_data = compiler(root, source, cli)
+        validate_intel_hex(firmware_data)
+        sketch_data = (root / source.sketch_path).read_bytes()
+        image_sha256 = None
+        if source.image is not None:
+            image_path = root / source.image["path"]
+            if not image_path.is_file():
+                raise ValueError(f"image is missing: {source.image['path']}")
+            image_sha256 = sha256_bytes(image_path.read_bytes())
+        artifact = FirmwareArtifact(
+            path=f"boards/{source.slug}.hex",
+            data=firmware_data,
+            source_sha256=sha256_bytes(sketch_data),
+            arduino_cli=toolchain.arduino_cli,
+            platform=toolchain.platform_for(source.fqbn),
+            image_sha256=image_sha256,
+        )
+        manifest_path = f"boards/{source.slug}.json"
+        manifest_data = canonical_json(render_manifest(source, artifact))
+        generated[artifact.path] = firmware_data
+        generated[manifest_path] = manifest_data
+        published_boards.append(
+            {
+                "id": source.id,
+                "name": source.name,
+                "manifest": manifest_path,
+                "sha256": sha256_bytes(manifest_data),
+                "detect": copy.deepcopy(source.detect),
+            }
+        )
+
+    generated["registry.json"] = canonical_json(render_registry(registry, published_boards))
+    return generated
+
+
+def generate(
+    root: Path,
+    cli: str,
+    *,
+    compiler: GenerationCompiler = compile_reproducible,
+) -> list[str]:
+    generated = build_publication(root, cli, compiler=compiler)
+    changed = []
+    for relative_path, data in generated.items():
+        path = root / relative_path
+        try:
+            current = path.read_bytes()
+        except FileNotFoundError:
+            current = None
+        if current != data:
+            changed.append(relative_path)
+
+    expected_board_paths = {path for path in generated if path.startswith("boards/")}
+    existing_board_paths = {
+        path.relative_to(root).as_posix()
+        for pattern in ("*.hex", "*.json")
+        for path in (root / "boards").glob(pattern)
+    }
+    stale = sorted(existing_board_paths - expected_board_paths)
+    changed.extend(stale)
+
+    for relative_path in changed:
+        if relative_path in generated:
+            _atomic_write(root / relative_path, generated[relative_path])
+        else:
+            (root / relative_path).unlink()
+    return changed
+
+
+def verify(
+    root: Path,
+    cli: str,
+    *,
+    compiler: GenerationCompiler = compile_reproducible,
+) -> None:
+    expected = build_publication(root, cli, compiler=compiler)
+    mismatches = []
+    for relative_path, data in expected.items():
+        try:
+            current = (root / relative_path).read_bytes()
+        except FileNotFoundError:
+            current = None
+        if current != data:
+            mismatches.append(relative_path)
+    expected_board_paths = {path for path in expected if path.startswith("boards/")}
+    existing_board_paths = {
+        path.relative_to(root).as_posix()
+        for pattern in ("*.hex", "*.json")
+        for path in (root / "boards").glob(pattern)
+    }
+    mismatches.extend(sorted(existing_board_paths - expected_board_paths))
+    if mismatches:
+        raise ValueError(f"generated files are out of date: {', '.join(mismatches)}")
+
+
+def _resolve_commit(root: Path, revision: str, field: str) -> str:
+    if revision != "HEAD" and not re.fullmatch(r"[0-9a-fA-F]{40,64}", revision):
+        raise ValueError(f"{field} must be a full commit SHA")
+    try:
+        resolved = subprocess.check_output(
+            ["git", "rev-parse", "--verify", f"{revision}^{{commit}}"],
+            cwd=root,
+            text=True,
+            encoding="utf-8",
+        ).strip()
+    except subprocess.CalledProcessError as error:
+        raise ValueError(f"cannot resolve {field}") from error
+    if not re.fullmatch(r"[0-9a-fA-F]{40,64}", resolved):
+        raise ValueError(f"resolved {field} is not a full commit SHA")
+    return resolved
+
+
+def _read_git_json(root: Path, revision: str, path: str, field: str) -> dict[str, Any]:
+    try:
+        document = subprocess.check_output(
+            ["git", "show", f"{revision}:{path}"],
+            cwd=root,
+            text=True,
+            encoding="utf-8",
+        )
+        return _object(json.loads(document), field)
+    except (subprocess.CalledProcessError, UnicodeError, json.JSONDecodeError) as error:
+        raise ValueError(f"cannot read {field}") from error
+
+
+def validate_pr(root: Path, base: str, *, head: str = "HEAD") -> None:
+    if not re.fullmatch(r"[0-9a-fA-F]{40,64}", base):
+        raise ValueError("pull request base must be a full commit SHA")
+    base_commit = _resolve_commit(root, base, "pull request base")
+    head_commit = _resolve_commit(root, head, "pull request head")
+    try:
+        changed_output = subprocess.check_output(
+            [
+                "git",
+                "diff",
+                "--name-only",
+                "--diff-filter=ACDMRT",
+                f"{base_commit}...{head_commit}",
+            ],
+            cwd=root,
+            text=True,
+            encoding="utf-8",
+        )
+    except subprocess.CalledProcessError as error:
+        raise ValueError("cannot inspect pull request changes") from error
+    changed_paths = [line for line in changed_output.splitlines() if line]
+    base_registry = None
+    current_registry = None
+    if "registry.json" in {path.replace("\\", "/") for path in changed_paths}:
+        base_registry = _read_git_json(root, base_commit, "registry.json", "base registry.json")
+        current_registry = _read_git_json(root, head_commit, "registry.json", "head registry.json")
+    validate_changed_paths(changed_paths, base_registry, current_registry)
+
+
+def compile_all(
+    root: Path,
+    cli: str,
+    *,
+    compiler: GenerationCompiler = compile_reproducible,
+) -> list[tuple[str, int, str]]:
+    toolchain = ToolchainLock.load(root)
+    results = []
+    for source in load_sources(root):
+        toolchain.platform_for(source.fqbn)
+        data = compiler(root, source, cli)
+        validate_intel_hex(data)
+        results.append((source.id, len(data), sha256_bytes(data)))
+    return results
+
+
+def _parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--root", type=Path, default=Path("."))
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    validate_parser = subparsers.add_parser("validate-pr")
+    validate_parser.add_argument("--base", required=True)
+    validate_parser.add_argument("--head", default="HEAD")
+
+    for name in ("compile", "generate", "verify"):
+        command_parser = subparsers.add_parser(name)
+        command_parser.add_argument("--arduino-cli", default="arduino-cli")
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    arguments = _parser().parse_args(argv)
+    root = arguments.root.resolve()
+    try:
+        if arguments.command == "validate-pr":
+            validate_pr(root, arguments.base, head=arguments.head)
+            print("pull request generated-file policy: valid")
+        elif arguments.command == "compile":
+            for board_id, size, digest in compile_all(root, arguments.arduino_cli):
+                print(f"compiled {board_id}: {size} bytes sha256={digest}")
+        elif arguments.command == "generate":
+            changed = generate(root, arguments.arduino_cli)
+            if changed:
+                print("generated: " + ", ".join(changed))
+            else:
+                print("generated firmware is already current")
+        elif arguments.command == "verify":
+            verify(root, arguments.arduino_cli)
+            print("generated firmware matches a fresh reproducible build")
+        else:
+            raise AssertionError(f"unsupported command: {arguments.command}")
+    except (OSError, ValueError, subprocess.CalledProcessError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -284,6 +285,200 @@ class PublishedSchemaTests(unittest.TestCase):
         errors = [error.message for error in validator.iter_errors(manifest)]
 
         self.assertEqual(errors, [])
+
+
+class PublicationTests(unittest.TestCase):
+    VALID_HEX = b":0100000001FE\n:00000001FF\n"
+
+    def create_root(self, directory: str) -> Path:
+        root = Path(directory)
+        (root / "sources" / "boards").mkdir(parents=True)
+        (root / "boards").mkdir()
+        (root / ".github").mkdir()
+        (root / "sources" / "boards" / "arduino-uno-r3.json").write_text(
+            json.dumps(source_document(), ensure_ascii=False),
+            encoding="utf-8",
+        )
+        (root / "boards" / "arduino-uno-r3.ino").write_text(
+            "void setup() {}\nvoid loop() {}\n",
+            encoding="utf-8",
+        )
+        (root / ".github" / "firmware-toolchain.json").write_text(
+            json.dumps(
+                {
+                    "schemaVersion": 1,
+                    "arduinoCli": "1.5.1",
+                    "platforms": {"arduino:avr": "1.8.8"},
+                }
+            ),
+            encoding="utf-8",
+        )
+        (root / "registry.json").write_text(
+            json.dumps(
+                {
+                    "schemaVersion": 1,
+                    "revision": 2,
+                    "apps": [{"id": "pdf-viewer"}],
+                    "boards": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+        return root
+
+    def test_generation_writes_one_atomic_board_set_then_becomes_a_noop(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = self.create_root(directory)
+            compiles = 0
+
+            def compiler(path: Path, source: firmware.BoardSource, cli: str) -> bytes:
+                nonlocal compiles
+                self.assertEqual(path, root)
+                self.assertEqual(source.id, "arduino.uno-r3")
+                self.assertEqual(cli, "arduino-cli")
+                compiles += 1
+                return self.VALID_HEX
+
+            first_changes = firmware.generate(root, "arduino-cli", compiler=compiler)
+            second_changes = firmware.generate(root, "arduino-cli", compiler=compiler)
+
+            self.assertEqual(
+                first_changes,
+                [
+                    "boards/arduino-uno-r3.hex",
+                    "boards/arduino-uno-r3.json",
+                    "registry.json",
+                ],
+            )
+            self.assertEqual(second_changes, [])
+            self.assertEqual(compiles, 2)
+            self.assertEqual(
+                (root / "boards" / "arduino-uno-r3.hex").read_bytes(),
+                self.VALID_HEX,
+            )
+            manifest_bytes = (root / "boards" / "arduino-uno-r3.json").read_bytes()
+            manifest = json.loads(manifest_bytes)
+            registry = json.loads((root / "registry.json").read_bytes())
+            self.assertEqual(manifest["firmware"]["format"], "intel-hex")
+            self.assertEqual(registry["apps"], [{"id": "pdf-viewer"}])
+            self.assertEqual(registry["revision"], 3)
+            self.assertEqual(registry["boards"][0]["sha256"], firmware.sha256_bytes(manifest_bytes))
+
+    def test_generation_failure_leaves_every_published_file_untouched(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = self.create_root(directory)
+            old_manifest = b'{"legacy":true}\n'
+            (root / "boards" / "arduino-uno-r3.json").write_bytes(old_manifest)
+            old_registry = (root / "registry.json").read_bytes()
+
+            def failed_compiler(path: Path, source: firmware.BoardSource, cli: str) -> bytes:
+                raise ValueError("compile failed")
+
+            with self.assertRaisesRegex(ValueError, "compile failed"):
+                firmware.generate(root, "arduino-cli", compiler=failed_compiler)
+
+            self.assertEqual(
+                (root / "boards" / "arduino-uno-r3.json").read_bytes(),
+                old_manifest,
+            )
+            self.assertEqual((root / "registry.json").read_bytes(), old_registry)
+            self.assertFalse((root / "boards" / "arduino-uno-r3.hex").exists())
+
+    def test_toolchain_rejects_an_unlocked_fqbn_platform(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = self.create_root(directory)
+            document = source_document()
+            document["sketch"]["fqbn"] = "vendor:other:board"
+            (root / "sources" / "boards" / "arduino-uno-r3.json").write_text(
+                json.dumps(document),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "not locked"):
+                firmware.generate(root, "arduino-cli", compiler=lambda *_: self.VALID_HEX)
+
+    def test_generation_removes_artifacts_for_a_deleted_board_source(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = self.create_root(directory)
+            second = source_document()
+            second["id"] = "arduino.other"
+            second["name"] = "Arduino Other"
+            second["sketch"]["path"] = "boards/arduino-other.ino"
+            (root / "sources" / "boards" / "arduino-other.json").write_text(
+                json.dumps(second),
+                encoding="utf-8",
+            )
+            (root / "boards" / "arduino-other.ino").write_text(
+                "void setup() {}\nvoid loop() {}\n",
+                encoding="utf-8",
+            )
+            compiler = lambda *_: self.VALID_HEX
+            firmware.generate(root, "arduino-cli", compiler=compiler)
+            (root / "sources" / "boards" / "arduino-other.json").unlink()
+            (root / "boards" / "arduino-other.ino").unlink()
+
+            changes = firmware.generate(root, "arduino-cli", compiler=compiler)
+
+            self.assertIn("boards/arduino-other.hex", changes)
+            self.assertIn("boards/arduino-other.json", changes)
+            self.assertFalse((root / "boards" / "arduino-other.hex").exists())
+            self.assertFalse((root / "boards" / "arduino-other.json").exists())
+
+    def test_verify_detects_a_tampered_published_hex(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = self.create_root(directory)
+            compiler = lambda *_: self.VALID_HEX
+            firmware.generate(root, "arduino-cli", compiler=compiler)
+            (root / "boards" / "arduino-uno-r3.hex").write_bytes(b":00000001FF\n")
+
+            with self.assertRaisesRegex(ValueError, "out of date"):
+                firmware.verify(root, "arduino-cli", compiler=compiler)
+
+    def test_validate_pr_compares_registry_boards_against_the_real_git_base(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = self.create_root(directory)
+
+            def git(*arguments: str) -> None:
+                subprocess.run(
+                    ["git", "-c", "commit.gpgSign=false", *arguments],
+                    cwd=root,
+                    check=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                )
+
+            git("init")
+            git("config", "user.name", "Hana Test")
+            git("config", "user.email", "hana-test@example.invalid")
+            git("add", ".")
+            git("commit", "-m", "base")
+            base = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+
+            registry = json.loads((root / "registry.json").read_text(encoding="utf-8"))
+            registry["apps"] = [{"id": "music-app"}]
+            (root / "registry.json").write_text(json.dumps(registry), encoding="utf-8")
+            git("add", "registry.json")
+            git("commit", "-m", "change apps")
+
+            # The trusted pull_request_target guard must inspect the requested
+            # Git object, never an untrusted or dirty working tree checkout.
+            app_head = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=root, text=True
+            ).strip()
+            registry["boards"] = [{"id": "working-tree-only-tamper"}]
+            (root / "registry.json").write_text(json.dumps(registry), encoding="utf-8")
+            firmware.validate_pr(root, base, head=app_head)
+
+            git("restore", "registry.json")
+            firmware.validate_pr(root, base)
+
+            registry["boards"] = [{"id": "arduino.uno-r3"}]
+            (root / "registry.json").write_text(json.dumps(registry), encoding="utf-8")
+            git("add", "registry.json")
+            git("commit", "-m", "change boards")
+
+            with self.assertRaisesRegex(ValueError, "registry.json boards"):
+                firmware.validate_pr(root, base)
 
 
 if __name__ == "__main__":
