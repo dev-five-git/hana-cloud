@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/dev-five-git/hana-registry/main/schemas/normalization-examples.schema.json",
+  "$id": "https://raw.githubusercontent.com/dev-five-git/hana-cloud/main/schemas/normalization-examples.schema.json",
   "title": "Hana Normalization Contract Examples",
   "type": "object",
   "additionalProperties": false,

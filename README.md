@@ -1,6 +1,6 @@
-# Hana Registry
+# Hana Cloud
 
-Hana Registry는 한번(HanBeon)이 사용하는 응용 프로그램 프로필과 외부 보드
+Hana Cloud는 한번(HanBeon)이 사용하는 응용 프로그램 프로필과 외부 보드
 자료를 배포하는 공개 데이터 저장소입니다. 실행 코드와 업로더 구현은 두지 않고,
 검토 가능한 JSON·펌웨어·이미지만 관리합니다.
 
@@ -213,7 +213,7 @@ Uno의 VID/PID 목록과 USB 문자열은 Arduino의
 런타임 연결을 맺는 기존 프로토콜로만 유지합니다. 최초 보드 식별이나 레지스트리
 매칭 조건에는 사용하지 않습니다.
 
-다운로드는 HTTPS `raw.githubusercontent.com/dev-five-git/hana-registry`로 고정하고,
+다운로드는 HTTPS `raw.githubusercontent.com/dev-five-git/hana-cloud`로 고정하고,
 리다이렉트 후 host 변경을 허용하지 않습니다. 제한은 인덱스 256KiB, 앱 프로필
 64KiB, 보드 manifest 64KiB, 펌웨어 2MiB, 이미지 5MiB, 요청당 5초입니다.
 
