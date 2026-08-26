@@ -37,6 +37,7 @@ jobs:
         run: |
           arduino-cli core update-index
           arduino-cli core install arduino:avr@1.8.8
+          arduino-cli core install Seeeduino:nrf52@1.1.13 --additional-urls https://files.seeedstudio.com/arduino/package_seeeduino_boards_index.json
 
       - name: Run unit tests
         run: python -m unittest -v tests.test_firmware

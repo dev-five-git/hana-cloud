@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "id": "seeed.xiao-nrf52840-sense",
+  "name": "Seeed XIAO nRF52840 Sense",
+  "sketch": {
+    "path": "boards/seeed-xiao-nrf52840-sense.ino",
+    "fqbn": "Seeeduino:nrf52:xiaonRF52840Sense"
+  },
+  "detect": {
+    "usb": [
+      {
+        "vid": "2886",
+        "pid": "8045",
+        "confidence": "exact",
+        "manufacturerAliases": ["Seeed Studio"],
+        "productAliases": ["XIAO nRF52840 Sense"]
+      },
+      {
+        "vid": "2886",
+        "pid": "0045",
+        "confidence": "exact",
+        "manufacturerAliases": ["Seeed Studio"],
+        "productAliases": ["XIAO nRF52840 Sense"]
+      }
+    ]
+  },
+  "wiring": [
+    {
+      "from": "D2",
+      "to": "순간 누름 스위치 NO 단자",
+      "note": "스위치 COM 단자는 GND에 연결"
+    }
+  ]
+}
