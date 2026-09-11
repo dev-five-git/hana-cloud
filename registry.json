@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "revision": 3,
+  "revision": 4,
   "apps": [
     {
       "id": "pdf-viewer",
@@ -70,6 +70,31 @@
     }
   ],
   "boards": [
+    {
+      "id": "arduino.uno-r3-ch340",
+      "name": "Arduino Uno R3 호환 보드 (CH340)",
+      "manifest": "boards/arduino-uno-r3-ch340.json",
+      "sha256": "8e20a9e6d5a7b187dd5a60b4bdec0229d796d9e413febfa37877c13cab568861",
+      "detect": {
+        "usb": [
+          {
+            "vid": "1a86",
+            "pid": "7523",
+            "confidence": "ambiguous"
+          },
+          {
+            "vid": "1a86",
+            "pid": "7522",
+            "confidence": "ambiguous"
+          },
+          {
+            "vid": "1a86",
+            "pid": "5523",
+            "confidence": "ambiguous"
+          }
+        ]
+      }
+    },
     {
       "id": "arduino.uno-r3",
       "name": "Arduino Uno R3",
