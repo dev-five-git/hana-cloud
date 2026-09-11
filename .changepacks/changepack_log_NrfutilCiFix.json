@@ -1,0 +1,5 @@
+{
+  "changes": {},
+  "note": "fix(ci): install pinned adafruit-nrfutil through the existing cached requirements in validation and publishing, verify CLI availability before Seeeduino nRF52 compilation, and trigger publishing on dependency changes.",
+  "date": "2026-09-11T06:26:20.000Z"
+}
