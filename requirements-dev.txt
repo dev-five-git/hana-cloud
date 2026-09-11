@@ -1,1 +1,3 @@
 jsonschema==4.26.0
+# Linux DFU packaging tool required by Seeeduino:nrf52's compile recipe.
+adafruit-nrfutil==0.5.3.post16
