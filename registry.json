@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "revision": 4,
+  "revision": 5,
   "apps": [
     {
       "id": "pdf-viewer",
@@ -175,6 +175,38 @@
               "Arduino Uno",
               "Arduino Uno R3",
               "Arduino Uno Rev3"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "seeed.xiao-nrf52840-sense",
+      "name": "Seeed XIAO nRF52840 Sense",
+      "manifest": "boards/seeed-xiao-nrf52840-sense.json",
+      "sha256": "26a1343441e6be05f9e3506101e9d7adc157e5e2bdd3899751ae2a5e68fbfccb",
+      "detect": {
+        "usb": [
+          {
+            "vid": "2886",
+            "pid": "8045",
+            "confidence": "exact",
+            "manufacturerAliases": [
+              "Seeed Studio"
+            ],
+            "productAliases": [
+              "XIAO nRF52840 Sense"
+            ]
+          },
+          {
+            "vid": "2886",
+            "pid": "0045",
+            "confidence": "exact",
+            "manufacturerAliases": [
+              "Seeed Studio"
+            ],
+            "productAliases": [
+              "XIAO nRF52840 Sense"
             ]
           }
         ]

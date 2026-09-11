@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 2,
+  "id": "seeed.xiao-nrf52840-sense",
+  "firmware": {
+    "path": "boards/seeed-xiao-nrf52840-sense.hex",
+    "format": "intel-hex",
+    "size": 336714,
+    "sha256": "a7e313ba4d330a1333713a28ab531e7283154c27e24f74321bec1c5bee16a2fb",
+    "fqbn": "Seeeduino:nrf52:xiaonRF52840Sense",
+    "source": {
+      "path": "boards/seeed-xiao-nrf52840-sense.ino",
+      "sha256": "1a32a1cc5d9e250039d7b543695058718fc95c12125b4317e99e478452fa2738"
+    },
+    "toolchain": {
+      "arduinoCli": "1.5.1",
+      "platform": "Seeeduino:nrf52@1.1.13"
+    }
+  },
+  "wiring": [
+    {
+      "from": "D2",
+      "to": "순간 누름 스위치 NO 단자",
+      "note": "스위치 COM 단자는 GND에 연결"
+    }
+  ]
+}
